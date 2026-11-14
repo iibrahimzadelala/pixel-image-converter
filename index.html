@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Пиксель-редактор в CSS box-shadow</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="toolbar">
+    <label class="color-label">
+      Цвет: <input type="color" id="colorPicker" value="#ff3366">
+    </label>
+    
+    <label class="size-label">
+      Размер:
+      <select id="gridSizeSelect">
+        <option value="16">16 × 16</option>
+        <option value="20">20 × 20</option>
+        <option value="24" selected>24 × 24</option>
+        <option value="32">32 × 32</option>
+      </select>
+    </label>
+
+    <button id="brushBtn" class="active">Кисть</button>
+    <button id="eraserBtn">Ластик</button>
+
+    <!-- Кнопка загрузки картинки -->
+    <label class="upload-btn">
+      📁 Загрузить арт
+      <input type="file" id="uploadInput" accept="image/*" style="display: none;">
+    </label>
+
+    <button id="clearBtn">Очистить всё</button>
+    <button id="copyBtn">Скопировать CSS</button>
+  </div>
+
+  <div class="workspace">
+    <div class="grid" id="grid"></div>
+
+    <div class="side-panel">
+      <div>
+        <div class="panel-title">Предпросмотр (масштаб 6x):</div>
+        <div class="preview-box">
+          <div id="preview-pixel"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-title">Готовый CSS-код:</div>
+        <textarea id="cssOutput" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
