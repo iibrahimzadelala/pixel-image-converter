@@ -8,6 +8,10 @@ const copyBtn = document.getElementById('copyBtn');
 const uploadInput = document.getElementById('uploadInput');
 const previewPixel = document.getElementById('preview-pixel');
 const cssOutput = document.getElementById('cssOutput');
+const recentColorsContainer = document.getElementById('recentColors');
+
+const RECENT_COLORS_KEY = 'pixelBoxShadowRecentColors';
+const MAX_RECENT_COLORS = 12;
 
 let SIZE = parseInt(gridSizeSelect.value);
 let CENTER = Math.floor(SIZE / 2);
@@ -15,6 +19,82 @@ let CENTER = Math.floor(SIZE / 2);
 let isDrawing = false;
 let mode = 'brush'; // 'brush' или 'eraser'
 let cells = [];
+let recentColors = loadRecentColors();
+
+function normalizeHex(color) {
+  if (!color || typeof color !== 'string') return null;
+  const trimmed = color.trim().toUpperCase();
+
+  if (/^#[0-9A-F]{6}$/.test(trimmed)) return trimmed;
+  if (/^#[0-9A-F]{3}$/.test(trimmed)) {
+    return '#' + trimmed.slice(1).split('').map((ch) => ch + ch).join('');
+  }
+  return null;
+}
+
+function loadRecentColors() {
+  try {
+    const raw = localStorage.getItem(RECENT_COLORS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeHex).filter(Boolean).slice(0, MAX_RECENT_COLORS);
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentColors() {
+  try {
+    localStorage.setItem(RECENT_COLORS_KEY, JSON.stringify(recentColors));
+  } catch {
+    // Игнорируем ошибки доступа к localStorage
+  }
+}
+
+function addRecentColor(color) {
+  const hex = normalizeHex(color);
+  if (!hex) return;
+
+  recentColors = [
+    hex,
+    ...recentColors.filter((item) => item !== hex),
+  ].slice(0, MAX_RECENT_COLORS);
+
+  saveRecentColors();
+  renderRecentColors();
+}
+
+function renderRecentColors() {
+  if (!recentColorsContainer) return;
+
+  const activeHex = normalizeHex(colorPicker.value);
+  recentColorsContainer.innerHTML = '';
+
+  recentColors.forEach((hex) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'color-swatch';
+    if (hex === activeHex) {
+      btn.classList.add('is-active');
+    }
+    btn.style.backgroundColor = hex;
+    btn.title = hex;
+    btn.setAttribute('aria-label', `Выбрать цвет ${hex}`);
+
+    btn.addEventListener('click', () => {
+      colorPicker.value = hex.toLowerCase();
+      if (mode === 'eraser') {
+        mode = 'brush';
+        brushBtn.classList.add('active');
+        eraserBtn.classList.remove('active');
+      }
+      renderRecentColors();
+    });
+
+    recentColorsContainer.appendChild(btn);
+  });
+}
 
 function initGrid(newSize) {
   SIZE = newSize;
@@ -61,7 +141,7 @@ uploadInput.addEventListener('change', (e) => {
       tempCanvas.width = SIZE;
       tempCanvas.height = SIZE;
       const tempCtx = tempCanvas.getContext('2d');
-      
+
       tempCtx.clearRect(0, 0, SIZE, SIZE);
       tempCtx.drawImage(img, 0, 0, SIZE, SIZE);
 
@@ -72,6 +152,8 @@ uploadInput.addEventListener('change', (e) => {
         cell.style.backgroundColor = '#ffffff';
         cell.dataset.color = '';
       });
+
+      const importedColors = [];
 
       cells.forEach(cell => {
         const x = parseInt(cell.dataset.x);
@@ -86,8 +168,14 @@ uploadInput.addEventListener('change', (e) => {
           const hexColor = rgbToHex(r, g, b);
           cell.style.backgroundColor = hexColor;
           cell.dataset.color = hexColor;
+          importedColors.push(hexColor);
         }
       });
+
+      // Добавляем уникальные цвета из загруженной картинки в историю (с конца, чтобы первые остались ближе к началу)
+      [...new Set(importedColors.map(normalizeHex).filter(Boolean))]
+        .reverse()
+        .forEach(hex => addRecentColor(hex));
 
       updateCSS();
       uploadInput.value = '';
@@ -98,7 +186,8 @@ uploadInput.addEventListener('change', (e) => {
 });
 
 function rgbToHex(r, g, b) {
-  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  const toHex = (n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
 // События рисования (мышь, палец, стилус)
@@ -128,6 +217,7 @@ function paintCell(cell) {
     const color = colorPicker.value;
     cell.style.backgroundColor = color;
     cell.dataset.color = color;
+    addRecentColor(color);
   } else {
     // Ластик
     cell.style.backgroundColor = '#ffffff';
@@ -135,6 +225,9 @@ function paintCell(cell) {
   }
   updateCSS();
 }
+
+colorPicker.addEventListener('input', renderRecentColors);
+colorPicker.addEventListener('change', renderRecentColors);
 
 // Генерация CSS с учетом центральной точки
 function updateCSS() {
@@ -146,7 +239,7 @@ function updateCSS() {
     if (color) {
       const x = parseInt(cell.dataset.x) - CENTER;
       const y = parseInt(cell.dataset.y) - CENTER;
-      
+
       if (x === 0 && y === 0) {
         centerColor = color;
       } else {
@@ -160,7 +253,7 @@ function updateCSS() {
 
   let cssCode = `.pixel-art {\n  width: 1px;\n  height: 1px;\n  background: ${centerColor};\n`;
   if (shadows.length > 0) {
-    cssCode += `  box-shadow:\n    ${shadowString = shadows.join(',\n    ')};\n`;
+    cssCode += `  box-shadow:\n    ${shadows.join(',\n    ')};\n`;
   }
   cssCode += `}`;
 
@@ -200,5 +293,6 @@ copyBtn.addEventListener('click', () => {
   setTimeout(() => copyBtn.textContent = 'Скопировать CSS', 1500);
 });
 
-// Первичный запуск сетки
+// Первичный запуск сетки и панели недавних цветов
+renderRecentColors();
 initGrid(SIZE);
